@@ -106,26 +106,37 @@ class r0123456:
         :return: The same individual with any potential mutations
         """
         n = individual.size
+        i, j = np.sort(np.random.randint(n, size=2))
+        if i == j:
+            j = (i+1)%n
 
         #swap mutation
         if random.random() < rates[0]:
-            i, j = np.sort(np.random.randint(n, size = 2))
+            i, j = np.sort(np.random.randint(n, size=2))
+            if i == j:
+                j = (i + 1) % n
             individual[i], individual[j] = individual[j], individual[i]
 
         #insert mutation
         if random.random() < rates[1]:
-            i, j = np.sort(np.random.randint(n, size = 2))
+            i, j = np.sort(np.random.randint(n, size=2))
+            if i == j:
+                j = (i + 1) % n
             individual[i+2:j+1], individual[i+1] = individual[i+1:j], individual[j]
 
         #scramble mutation
         if random.random() < rates[2]:
-            i, j = np.sort(np.random.randint(n, size = 2))
+            i, j = np.sort(np.random.randint(n, size=2))
+            if i == j:
+                j = (i + 1) % n
             segment = individual[i:j + 1]
             np.random.shuffle(segment)
 
         #inversion mutation
         if random.random() < rates[3]:
-            i, j = np.sort(np.random.randint(n, size = 2))
+            i, j = np.sort(np.random.randint(n, size=2))
+            if i == j:
+                j = (i + 1) % n
             individual[i:j + 1] = individual[i:j + 1][::-1]
 
         return individual
@@ -315,8 +326,12 @@ class r0123456:
                     proposed = proposed1 + distance_matrix[E,B] + distance_matrix[C,F]
 
                     if proposed < current:
-                        individual = np.concatenate((individual[:i+1], individual[j+1:k+1], individual[i+1:j+1], individual[k+1:]))
-                        return individual
+                        new_order = np.empty_like(individual)
+                        new_order[:i + 1] = individual[:i + 1]
+                        new_order[i + 1:i + 1 + (k - j)] = individual[j + 1:k + 1]
+                        new_order[i + 1 + (k - j):i + 1 + (k - j) + (j - i)] = individual[i + 1:j + 1]
+                        new_order[i + 1 + (k - j) + (j - i):] = individual[k + 1:]
+                        return new_order
 
         return individual
 
@@ -361,6 +376,49 @@ class r0123456:
 
         return individual
 
+    def ult_swap_opt(self, individual, distance_matrix):
+        """
+        Local search algoritm that searches for any two cities to swap that would be beneficial. Goes over all options
+        :param individual: The individual to optimize
+        :param distance_matrix: the distance matrix
+        :return: A potentially improved version of individual
+        """
+        n = individual.size
+        r = np.arange(n)
+        np.random.shuffle(r)
+        for i in range(n):
+            for j in range(i+1, n):
+                if j == i:
+                    continue
+                curLoc = r[i]
+                propLoc = r[j]
+                A = individual[curLoc]
+                B = individual[propLoc]
+                curLeft = individual[curLoc - 1]
+                curRight = individual[(curLoc + 1)%n]
+                propLeft = individual[propLoc - 1]
+                propRight = individual[(propLoc + 1)%n]
+                if curRight == B:
+                    curDist = (distance_matrix[curLeft, A] + distance_matrix[A, B] +
+                               distance_matrix[B, propRight])
+                    propDist = (distance_matrix[curLeft, B] + distance_matrix[B, A] +
+                               distance_matrix[A, propRight])
+                elif curLeft == B:
+                    curDist = (distance_matrix[A, curRight] +
+                               distance_matrix[propLeft, B] + distance_matrix[B, A])
+                    propDist = (distance_matrix[B, curRight] +
+                               distance_matrix[propLeft, A] + distance_matrix[A, B])
+                else:
+                    curDist = (distance_matrix[curLeft, A] + distance_matrix[A, curRight] +
+                               distance_matrix[propLeft, B] + distance_matrix[B, propRight])
+                    propDist = (distance_matrix[curLeft, B] + distance_matrix[B, curRight] +
+                               distance_matrix[propLeft, A] + distance_matrix[A, propRight])
+
+                if curDist>propDist:
+                    individual[curLoc], individual[propLoc] = B, A
+                    return individual
+
+        return individual
 
     def optimize(self, filename):
         """
@@ -375,7 +433,6 @@ class r0123456:
         pop_size_greedy = 20
         pop_size=pop_size_greedy+pop_size_random
         tournament_k = 3
-        stagnation_limit = 50
         initialize_var = 6
         mutation_rates = [0.1, 0.1, 0.1, 0.05]
 
@@ -385,6 +442,7 @@ class r0123456:
 
         best_history = []
         elite = population[0]  # placeholder elite
+        prev_elite = elite.copy()
         while True:
             fitnesses = np.empty(len(population), dtype=float)
             for i, ind in enumerate(population):
@@ -400,12 +458,6 @@ class r0123456:
 
             bestSolution = population[best_idx]
             elite = population[best_idx].copy()
-
-            best_history.append(bestObjective)
-            if len(best_history) > stagnation_limit:
-                window = best_history[-stagnation_limit:]
-                if max(window) - min(window) < 1e-6:
-                    break
 
             timeLeft = self.reporter.report(meanObjective, bestObjective, bestSolution)
             if timeLeft < 0:
@@ -424,8 +476,11 @@ class r0123456:
                 child2 = self.swap_opt(child2, distanceMatrix)
                 offspring[i] = child1
                 offspring[i+1] = child2
-
-            elite = self.swap_opt(elite, distanceMatrix)
+            if (elite == prev_elite).all():
+                elite = self.three_opt(elite, distanceMatrix)
+            else:
+                prev_elite = elite.copy()
+                elite = self.ult_swap_opt(elite, distanceMatrix)
             population = offspring
 
         return 0
