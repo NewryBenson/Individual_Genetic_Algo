@@ -140,32 +140,45 @@ class r0123456:
         """
         n = parent1.size
         child = np.zeros(n, dtype=int)
+
+        #boolean mask
+        visited = np.zeros(n, dtype=bool)
+
         current = random.choice(parent1)
         child[0] = current
-        visited = {current}
+        visited[current] = True
 
-        succ1 = {parent1[i]: parent1[(i + 1)%n] for i in range(n)}
-        succ2 = {parent2[i]: parent2[(i + 1)%n] for i in range(n)}
+        #lookup tables
+        pos1 = np.empty(n, dtype=int)
+        pos2 = np.empty(n, dtype=int)
+
+        for i in range(n):
+            pos1[parent1[i]] = i
+            pos2[parent2[i]] = i
 
         for i in range(n - 1):
-            c1 = succ1[current]
-            c2 = succ2[current]
+            distance_matrix_current_row = distance_matrix[current]
+            c1 = parent1[(pos1[current] + 1) % n]
+            c2 = parent2[(pos2[current] + 1) % n]
 
-            candidates = []
+            next_city = -1
 
-            if c1 not in visited:
-                candidates.append(c1)
-            if c2 not in visited and c2 != c1:
-                candidates.append(c2)
-
-            if candidates:
-                next_city = min(candidates, key=lambda c: distance_matrix[current][c])
+            if not visited[c1]:
+                if visited[c2] or c1 == c2:
+                    next_city = c1
+                else:
+                    if distance_matrix_current_row[c1] <= distance_matrix_current_row[c2]:
+                        next_city = c1
+                    else:
+                        next_city = c2
+            elif not visited[c2]:
+                next_city = c2
             else:
-                remaining = [c for c in range(n) if c not in visited]
-                next_city = min(remaining, key=lambda c: distance_matrix[current][c])
+                mask = np.where(visited, np.inf, distance_matrix_current_row)
+                next_city = int(mask.argmin())
 
             child[i+1] = next_city
-            visited.add(next_city)
+            visited[next_city] = True
             current = next_city
 
         return child
@@ -315,21 +328,33 @@ class r0123456:
         :return: A potentially improved version of individual
         """
         n = individual.size
-        r = list(range(n-1))
-        random.shuffle(r)
-        for i in range(n-1):
+        r = np.arange(n)
+        np.random.shuffle(r)
+        for i in range(n):
             curLoc = r[i]
             propLoc = r[(i+1)%len(r)]
             A = individual[curLoc]
             B = individual[propLoc]
             curLeft = individual[curLoc - 1]
-            curRight = individual[curLoc + 1]
+            curRight = individual[(curLoc + 1)%n]
             propLeft = individual[propLoc - 1]
-            propRight = individual[propLoc + 1]
-            curDist = (distance_matrix[curLeft, A] + distance_matrix[A, curRight] +
-                       distance_matrix[propLeft, B] + distance_matrix[B, propRight])
-            propDist = (distance_matrix[curLeft, B] + distance_matrix[B, curRight] +
-                       distance_matrix[propLeft, A] + distance_matrix[A, propRight])
+            propRight = individual[(propLoc + 1)%n]
+            if curRight == B:
+                curDist = (distance_matrix[curLeft, A] + distance_matrix[A, B] +
+                           distance_matrix[B, propRight])
+                propDist = (distance_matrix[curLeft, B] + distance_matrix[B, A] +
+                           distance_matrix[A, propRight])
+            elif curLeft == B:
+                curDist = (distance_matrix[A, curRight] +
+                           distance_matrix[propLeft, B] + distance_matrix[B, A])
+                propDist = (distance_matrix[B, curRight] +
+                           distance_matrix[propLeft, A] + distance_matrix[A, B])
+            else:
+                curDist = (distance_matrix[curLeft, A] + distance_matrix[A, curRight] +
+                           distance_matrix[propLeft, B] + distance_matrix[B, propRight])
+                propDist = (distance_matrix[curLeft, B] + distance_matrix[B, curRight] +
+                           distance_matrix[propLeft, A] + distance_matrix[A, propRight])
+
             if curDist>propDist:
                 individual[curLoc], individual[propLoc] = B, A
                 return individual
@@ -360,7 +385,6 @@ class r0123456:
 
         best_history = []
         elite = population[0]  # placeholder elite
-
         while True:
             fitnesses = np.empty(len(population), dtype=float)
             for i, ind in enumerate(population):
@@ -400,8 +424,8 @@ class r0123456:
                 child2 = self.swap_opt(child2, distanceMatrix)
                 offspring[i] = child1
                 offspring[i+1] = child2
-            # --- Survivor selection ---
-            elite = self.three_opt(elite, distanceMatrix)
+
+            elite = self.swap_opt(elite, distanceMatrix)
             population = offspring
 
         return 0
