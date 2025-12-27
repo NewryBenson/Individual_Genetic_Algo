@@ -106,9 +106,6 @@ class r0123456:
         :return: The same individual with any potential mutations
         """
         n = individual.size
-        i, j = np.sort(np.random.randint(n, size=2))
-        if i == j:
-            j = (i+1)%n
 
         #swap mutation
         if random.random() < rates[0]:
@@ -119,24 +116,24 @@ class r0123456:
 
         #insert mutation
         if random.random() < rates[1]:
-            i, j = np.sort(np.random.randint(n, size=2))
+            i, j = np.sort(np.random.randint(n-2, size=2))
             if i == j:
-                j = (i + 1) % n
-            individual[i+2:j+1], individual[i+1] = individual[i+1:j], individual[j]
+                j = i + 1
+            individual[i+2:j+1], individual[i + 1] = individual[i + 1:j], individual[j]
 
         #scramble mutation
         if random.random() < rates[2]:
-            i, j = np.sort(np.random.randint(n, size=2))
+            i, j = np.sort(np.random.randint(n-2, size=2))
             if i == j:
-                j = (i + 1) % n
+                j = i + 1
             segment = individual[i:j + 1]
             np.random.shuffle(segment)
 
         #inversion mutation
         if random.random() < rates[3]:
-            i, j = np.sort(np.random.randint(n, size=2))
+            i, j = np.sort(np.random.randint(n-2, size=2))
             if i == j:
-                j = (i + 1) % n
+                j = i + 1
             individual[i:j + 1] = individual[i:j + 1][::-1]
 
         return individual
@@ -335,6 +332,27 @@ class r0123456:
 
         return individual
 
+    def two_opt(self, individual, distance_matrix):
+        """
+        Local search algoritm that searches for any segment to invert that would be beneficial
+        :param individual: The individual to optimize
+        :param distance_matrix: the distance matrix
+        :return: A potentially improved version of individual
+        """
+        n = individual.size
+        currentCost = self.length(individual, distance_matrix)
+        r = np.arange(n-1)
+        np.random.shuffle(r)
+        for i in r:
+            for j in range(i, n-1):
+                new_individual = individual.copy()
+                new_individual[i:j + 1] = individual[i:j + 1][::-1]
+                if self.length(new_individual, distance_matrix) < currentCost:
+                    return new_individual
+        return individual
+
+
+
     def swap_opt(self, individual, distance_matrix):
         """
         Local search algoritm that searches for any two cities to swap that would be beneficial
@@ -440,9 +458,9 @@ class r0123456:
         populationGreedy = self.greedy_initialize_population(pop_size_greedy, n , initialize_var, distanceMatrix)
         population = np.concatenate((populationRandom, populationGreedy))
 
-        best_history = []
         elite = population[0]  # placeholder elite
         prev_elite = elite.copy()
+        stagnation_count = 0
         while True:
             fitnesses = np.empty(len(population), dtype=float)
             for i, ind in enumerate(population):
@@ -474,12 +492,20 @@ class r0123456:
                 child2 = self.mutate(child2, mutation_rates)
                 child1 = self.swap_opt(child1, distanceMatrix)
                 child2 = self.swap_opt(child2, distanceMatrix)
+                child1 = self.two_opt(child1, distanceMatrix)
+                child2 = self.two_opt(child2, distanceMatrix)
                 offspring[i] = child1
                 offspring[i+1] = child2
             if (elite == prev_elite).all():
-                elite = self.three_opt(elite, distanceMatrix)
+                stagnation_count += 1
+                if stagnation_count>=3:
+                    elite = self.three_opt(elite, distanceMatrix)
+
+
             else:
+                stagnation_count = 0
                 prev_elite = elite.copy()
+                elite = self.two_opt(elite, distanceMatrix)
                 elite = self.ult_swap_opt(elite, distanceMatrix)
             population = offspring
 
