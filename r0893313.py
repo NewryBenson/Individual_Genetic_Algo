@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import Reporter
 import random
@@ -190,110 +189,6 @@ class r0123456:
             current = next_city
 
         return child
-
-    def fast_edge_assembly_crossover(self, parent1, parent2, amount, distance_matrix):
-        """
-        Edge assembly crossover as described in Merlevede A. 2020, but with non-complete subtour reconection.
-        :param parent1: first parent
-        :param parent2: second parent
-        :param amount: amount of children to return
-        :param distance_matrix: the distance matrix
-        :return: amount of children that closely follow the parents but make greedy connections sometimes
-        """
-        size = len(parent1)
-        Ea = np.empty(size, dtype=int)
-        Eb = np.empty(size, dtype=int)
-        for i in range(size):
-            Ea[parent1[i]] = parent1[(i + 1) % size]
-            Eb[parent2[i]] = parent2[(i + 1) % size]
-        invEa = np.empty(size, dtype=int)
-        invEb = np.empty(size, dtype=int)
-        for i in range(size):
-            invEa[Ea[i]] = i
-            invEb[Eb[i]] = i
-        EbinvEa = Eb[invEa]
-
-        cycles = []
-        visited = np.zeros(size, dtype=bool)
-
-        for start in range(size):
-            if visited[start]:
-                continue
-
-            cur = start
-            cycle = []
-            while not visited[cur]:
-                visited[cur] = True
-                cycle.append(cur)
-                cur = EbinvEa[cur]
-
-            cycles.append(cycle)
-
-        children = []
-        for _ in range(amount):
-            size_cycles = len(cycles)
-            number_of_cycles = np.random.choice(list(range(size_cycles + 1)), p=[math.comb(size_cycles, k) / (2 ** size_cycles) for k in range(size_cycles + 1)])
-            subset = random.sample(cycles, number_of_cycles)
-            Ex = Eb.copy()
-
-            for cycle in subset:
-                for k in range(len(cycle)):
-                    city = cycle[k]
-                    prev_city = cycle[k - 1]
-                    pos = invEb[city]
-                    Ex[pos] = prev_city
-            visited = np.zeros(size, dtype=bool)
-            subtours = []
-            for start in range(size):
-                if visited[start]:
-                    continue
-                cur = start
-                tour = []
-                while not visited[cur]:
-                    visited[cur] = True
-                    tour.append(cur)
-                    cur = Ex[cur]
-                subtours.append(np.asarray(tour, dtype=np.int32))
-
-            while len(subtours) > 1:
-
-                U = min(subtours, key=len)
-
-                best_dist = np.inf
-                best_connect = None
-
-                longest_dist = 0
-                longest_v1 = None
-                for i in range(len(U)):
-                    dist = distance_matrix[U[i], U[(i+1)%len(U)]]
-                    if dist>longest_dist:
-                        longest_dist = dist
-                        longest_v1 = i
-                v1 = U[longest_v1]
-                for tour in subtours:
-                    if tour is U:
-                        continue
-
-                    for j in range(len(tour)):
-                        v3 = tour[j]
-                        dist = distance_matrix[v1,v3]
-
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_connect = (tour, j)
-
-                T, j = best_connect
-
-                new_tour = np.concatenate((U[:longest_v1], T[j:], T[:j], U[longest_v1:]))
-
-                idx = next(i for i, t in enumerate(subtours) if t is U)
-                del subtours[idx]
-
-                idx = next(i for i, t in enumerate(subtours) if t is T)
-                del subtours[idx]
-                subtours.append(new_tour)
-            children.append(subtours[0])
-        return children
 
     def three_opt(self, individual, distance_matrix):
         """
@@ -507,4 +402,4 @@ class r0123456:
                 elite = self.ult_swap_opt(elite, distanceMatrix)
             population = offspring
 
-        return bestObjective
+        return 0
