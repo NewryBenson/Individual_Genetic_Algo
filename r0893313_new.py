@@ -447,12 +447,14 @@ class r0123456:
         distanceMatrix = np.loadtxt(filename, delimiter=",")
         n = distanceMatrix.shape[0]
 
-        pop_size_random = 200
-        pop_size_greedy = 20
+        pop_size_random = int(200000/n)
+        if pop_size_random%2 != 0:
+            pop_size_random += 1
+        pop_size_greedy = 10
         pop_size=pop_size_greedy+pop_size_random
         tournament_k = 3
         initialize_var = 6
-        mutation_rates = [0.1, 0.1, 0.1, 0.05]
+        mutation_rates = [0.07, 0.07, 0.07, 0.07]
 
         populationRandom = self.random_initialize_population(pop_size_random, n)
         populationGreedy = self.greedy_initialize_population(pop_size_greedy, n , initialize_var, distanceMatrix)
@@ -492,16 +494,12 @@ class r0123456:
                 child2 = self.mutate(child2, mutation_rates)
                 child1 = self.swap_opt(child1, distanceMatrix)
                 child2 = self.swap_opt(child2, distanceMatrix)
-                child1 = self.two_opt(child1, distanceMatrix)
-                child2 = self.two_opt(child2, distanceMatrix)
                 offspring[i] = child1
                 offspring[i+1] = child2
             if (elite == prev_elite).all():
                 stagnation_count += 1
-                if stagnation_count>=3:
+                if stagnation_count==1:
                     elite = self.three_opt(elite, distanceMatrix)
-
-
             else:
                 stagnation_count = 0
                 prev_elite = elite.copy()
@@ -509,4 +507,4 @@ class r0123456:
                 elite = self.ult_swap_opt(elite, distanceMatrix)
             population = offspring
 
-        return 0
+        return bestObjective
